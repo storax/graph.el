@@ -1,0 +1,124 @@
+* graph.el
+[[https://travis-ci.org/storax/graph.el][https://travis-ci.org/storax/graph.el.svg?branch=master]]
+[[https://coveralls.io/github/storax/graph.el][https://coveralls.io/repos/github/storax/graph.el/badge.svg?branch=master]]
+
+A graph layout library for Emacs Lisp.
+
+*This is in early alpha so far!*
+
+The algorithm is a port from [[https://github.com/drcode/vijual][vijual]], a Clojure library by [[https://github.com/drcode][Conrad Barski]],
+who deserves most of the credit.
+
+** Features
+- [X] Text rendering
+- [ ] Image rendering
+- [X] Trees
+- [ ] Undirected graphs
+- [ ] Directed graphs
+- [ ] Binary trees
+
+** Examples
+*** Drawing trees
+You can render trees as text with =graphel-draw-tree=:
+#+BEGIN_SRC emacs-lisp :exports both
+(graph-draw-tree '((north-america (usa
+                                    (miami)
+                                    (seattle)
+                                    (idaho (boise))))
+                   (europe (germany)
+                            (france (paris)
+                                     (lyon)
+                                     (cannes)))))
+#+END_SRC
+#+RESULTS:
+#+BEGIN_EXAMPLE
+        +------------+        +--------+
+        |   north    |        | europe |
+        |  america   |        +----+---+
+        +------+-----+             |
+               |         +---------+---------+
+               +         |                   |
+               |    +----+----+          +---+----+
+            +--+--+ | germany |          | france |
+            | usa | +---------+          +---+----+
+            +--+--+                          |
+               |                    +--------+---------+
+    +----------+----------+         |        |         |
+    |          |          |     +---+---+ +--+---+ +---+----+
++---+---+ +----+----+ +---+---+ | paris | | lyon | | cannes |
+| miami | | seattle | | idaho | +-------+ +------+ +--------+
++-------+ +---------+ +---+---+
+                          |
+                          +
+                          |
+                      +---+---+
+                      | boise |
+                      +-------+
+
+#+END_EXAMPLE
+
+#+BEGIN_SRC emacs-lisp :exports both
+(graph-draw-tree '(("Eubacteria" ("Aquificae") ("Nitrospira") ("Proteobacteria") ("Chlamydiae") ("Actinobacteria")) ("Eukaryotes" ("Archaeplastida" ("Green Plants" ("Prasinophytes") ("Chlorophyceae") ("Trebouxiophyceae") ("Ulvophyceae") ("Streptohyta" ("Zygnematales") ("Charales") ("Embryophytes (land plants)"))) ("Rhodophyta") ("Glaucophytes")) ("Unikots" ("Opisthokonts" ("Animals" ("Bilateria" ("Ecdysozoa" ("Nematoda") ("Arthropoda")) ("Lophotrochozoa") ("Deuterostoma" ("Echinodermata") ("Hemichordata") ("Chordata" ("Urochordata") ("Cephalochordata") ("Yonnanozoon") ("Craniata")))) ("Cnidaria") ("Porifera")) ("Choanoflagellates") ("Filasterea") ("Ichthyosporea") ("Fungi") ("Nucleariidae"))) ("Chromalveolates" ("Rhizaria" ("Cercozoa") ("Foraminifera") ("Radiolaria")) ("Alveolates") ("Stramenopiles") ("Hacrobia")) ("Excavates" ("Malawimonads") ("Discicristates" ("Euglenozoa") ("Heterolobosea")) ("Fornicata")))))
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_EXAMPLE
+                             +------------+                                                                                              +------------+
+                             | Eubacteria |                                                                                              | Eukaryotes |
+                             +-----+------+                                                                                              +-----+------+
+                                   |                                                                                                           |
+      +-------------+--------------+--------------+--------------+              +---------------------------------+----------------------------+-------------+-------------------------------------------------+
+      |             |              |              |              |              |                                 |                                          |                                                 |
++-----+-----+ +-----+------+ +-----+------+ +-----+------+ +-----+------+ +-----+------+                     +----+----+                              +------+-----+                                     +-----+-----+
+| Aquificae | | Nitrospira | | Proteobact | | Chlamydiae | | Actinobact | | Archaeplas |                     | Unikots |                              | Chromalveo |                                     | Excavates |
++-----------+ +------------+ |    eria    | +------------+ |    eria    | |    tida    |                     +----+----+                              |   lates    |                                     +-----+-----+
+                             +------------+                +------------+ +-----+------+                          |                                   +------+-----+                                           |
+                                                                                |                                 +                                          |                                  +--------------+--------------+
+                                    +--------------+--------------+-------------+                                 |                    +-------------+-------+------+-------------+             |              |              |
+                                    |              |              |                                        +------+-----+              |             |              |             |       +-----+------+ +-----+------+ +-----+-----+
+                              +-----+------+ +-----+------+ +-----+------+                                 | Opisthokon |         +----+-----+ +-----+------+ +-----+------+ +----+-----+ | Malawimona | | Discicrist | | Fornicata |
+                              |   Green    | | Rhodophyta | | Glaucophyt |                                 |     ts     |         | Rhizaria | | Alveolates | | Stramenopi | | Hacrobia | |     ds     | |    ates    | +-----------+
+                              |   Plants   | +------------+ |     es     |                                 +------+-----+         +----+-----+ +------------+ |    les     | +----------+ +------------+ +-----+------+
+                              +-----+------+                +------------+                                        |                    |                      +------------+                                   |
+                                    |                                                                             |                    |                                                                      ++-------------+
+      +--------------+--------------+--------------+--------------+                                               |                    +--------------------------+-------------+--------------+              |              |
+      |              |              |              |              |                                               |                                               |             |              |        +-----+------+ +-----+------+
++-----+------+ +-----+------+ +-----+------+ +-----+------+ +-----+------+      +------------+--------------+-----+--------+------------+-----------+        +----+-----+ +-----+------+ +-----+------+ | Euglenozoa | | Heterolobo |
+| Prasinophy | | Chlorophyc | | Trebouxiop | | Ulvophycea | | Streptohyt |      |            |              |              |            |           |        | Cercozoa | | Foraminife | | Radiolaria | +------------+ |    sea     |
+|    tes     | |    eae     | |   hyceae   | |     e      | |     a      | +----+----+ +-----+------+ +-----+------+ +-----+------+ +---+---+ +-----+------+ +----------+ |     ra     | +------------+                +------------+
++------------+ +------------+ +------------+ +------------+ +-----+------+ | Animals | | Choanoflag | | Filasterea | | Ichthyospo | | Fungi | | Nucleariid |              +------------+
+                                                                  |        +----+----+ |  ellates   | +------------+ |    rea     | +-------+ |     ae     |
+                                                                  |             |      +------------+                +------------+           +------------+
+                                                                  |             |
+                                                                  |             +--------------+------------+------------+
+                                                                  |                            |            |            |
+                                                    +-------------+-------------+        +-----+-----+ +----+-----+ +----+-----+
+                                                    |             |             |        | Bilateria | | Cnidaria | | Porifera |
+                                              +-----+------+ +----+-----+ +-----+------+ +-----+-----+ +----------+ +----------+
+                                              | Zygnematal | | Charales | | Embryophyt |       |
+                                              |     es     | +----------+ |  es (land  |       |
+                                              +------------+              |  plants)   |       |
+                                                                          +------------+       |
+                                                                                               |
+                                                                                +--------------+--------------+
+                                                                                |              |              |
+                                                                          +-----+-----+ +------+-----+ +------+-----+
+                                                                          | Ecdysozoa | | Lophotroch | | Deuterosto |
+                                                                          +-----+-----+ |    ozoa    | |     ma     |
+                                                                                |       +------------+ +------+-----+
+                                                                         +------+------+                      |
+                                                                         |             |              +-------+------+-------------+
+                                                                   +-----+----+ +------+-----+        |              |             |
+                                                                   | Nematoda | | Arthropoda | +------+-----+ +------+-----+ +-----+----+
+                                                                   +----------+ +------------+ | Echinoderm | | Hemichorda | | Chordata |
+                                                                                               |    ata     | |     ta     | +-----+----+
+                                                                                               +------------+ +------------+       |
+                                                                                                                                   |
+                                                                                                            +----------------------+--------------+-------------+
+                                                                                                            |                      |              |             |
+                                                                                                      +-----+------+        +------+-----+ +------+-----+ +-----+----+
+                                                                                                      | Urochordat |        | Cephalocho | | Yonnanozoo | | Craniata |
+                                                                                                      |     a      |        |   rdata    | |     n      | +----------+
+                                                                                                      +------------+        +------------+ +------------+
+
+#+END_EXAMPLE
