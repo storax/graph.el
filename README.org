@@ -15,11 +15,11 @@ who deserves most of the credit.
 - [X] Trees
 - [ ] Undirected graphs
 - [ ] Directed graphs
-- [ ] Binary trees
+- [X] Binary trees
 
 ** Examples
 *** Drawing trees
-You can render trees as text with =graphel-draw-tree=:
+You can render trees as text with =graph-draw-tree=:
 #+BEGIN_SRC emacs-lisp :exports both
 (graph-draw-tree '((north-america (usa
                                     (miami)
@@ -121,4 +121,62 @@ You can render trees as text with =graphel-draw-tree=:
                                                                                                       |     a      |        |   rdata    | |     n      | +----------+
                                                                                                       +------------+        +------------+ +------------+
 
+#+END_EXAMPLE
+*** Drawing binary trees
+You can render binary trees as text with =graph-draw-binary-tree=:
+#+BEGIN_SRC emacs-lisp :exports both
+(graph-draw-binary-tree '(1 (2 (3) (4)) (5)))
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_EXAMPLE
+              +---+
+              | 1 |
+              +---+
+             /     \      
+            /       \     
+       +---+         +---+
+       | 2 |         | 5 |
+       +---+         +---+
+      /     \             
+     /       \            
++---+         +---+
+| 3 |         | 4 |
++---+         +---+
+#+END_EXAMPLE
+
+#+BEGIN_SRC emacs-lisp :exports both
+(graph-draw-binary-tree '(organisms (prokaryotes (e-coli)) (eukaryotes (plants (seed-plants (carrot) (oak-tree)) (ferns)) (animalia (invertebrates (sponge) (worm)) (mammals (mouse) (apes (chimpanzee) (human)))))))
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_EXAMPLE
+                             +-----------+
+                             | organisms |
+                             +-----------+
+                            /             \_________________________________________               
+                           /                                                        \              
+            +-------------+                                                          +------------+
+            | prokaryotes |                                                          | eukaryotes |
+            +-------------+                                                          +------------+
+           /                                                                        /              \_______________________________             
+          /                                                                        /                                               \            
++--------+                                                               +--------+                                                 +----------+
+| e coli |                                                               | plants |                                                 | animalia |
++--------+                                                               +--------+                                                 +----------+
+                                                                        /          \_                                              /            \___________            
+                                                                       /             \                                            /                         \           
+                                                        +-------------+               +-------+                  +---------------+                           +---------+
+                                                        | seed plants |               | ferns |                  | invertebrates |                           | mammals |
+                                                        +-------------+               +-------+                  +---------------+                           +---------+
+                                                       /               \                                        /                 \                         /           \________________         
+                                                      /                 \                                      /                   \                       /                             \        
+                                            +--------+                   +----------+                +--------+                     +------+      +-------+                               +------+
+                                            | carrot |                   | oak tree |                | sponge |                     | worm |      | mouse |                               | apes |
+                                            +--------+                   +----------+                +--------+                     +------+      +-------+                               +------+
+                                                                                                                                                                                         /        \          
+                                                                                                                                                                                        /          \         
+                                                                                                                                                                          +------------+            +-------+
+                                                                                                                                                                          | chimpanzee |            | human |
+                                                                                                                                                                          +------------+            +-------+
 #+END_EXAMPLE
