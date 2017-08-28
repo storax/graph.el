@@ -34,11 +34,14 @@
 (eval-when-compile (require 'cl-lib))
 (eval-when-compile (require 'cl))
 
-(cl-defstruct graph-shape
-  x y width height type text dir on-top)
+(cl-defstruct graph-shape x y width height type text dir on-top)
 
 (cl-defstruct graph-treen
-  id x y width height text wrapped-text line-right line-left line-y line-ypos leaf parent parent-line-y children)
+  id x y width height text wrapped-text
+  line-right line-left line-y line-ypos
+  leaf parent parent-line-y children)
+
+(cl-defstruct graph-btreen ind width text left right)
 
 (defmacro let-shape (binding shape &rest body)
   "Bind the slots in BINDING to the values in SHAPE and execute BODY.
@@ -74,6 +77,24 @@ expands to:
   (declare (indent defun))
   `(let ((treen ,treen))
      (let ,(mapcar (lambda (x) `(,x (cl-struct-slot-value 'graph-treen ',x treen))) binding)
+       ,@body)))
+
+(defmacro let-btreen (binding btreen &rest body)
+  "Bind the slots in BINDING to the values in BTREEN and execute BODY.
+
+For example, this code:
+
+  (let-btreen (ind width) btreenode
+     (message \"%s\ %s\" ind width))
+
+expands to:
+
+  (let ((ind (graph-btreen-ind treenode))
+        (width (graph-btreen-width treenode)))
+    (message \"%s %s\" x y))"
+  (declare (indent defun))
+  `(let ((btreen ,btreen))
+     (let ,(mapcar (lambda (x) `(,x (cl-struct-slot-value 'graph-btreen ',x btreen))) binding)
        ,@body)))
 
 (defun graph-half (x)
@@ -209,18 +230,19 @@ MORE is the rest of the shapes."
 
 Shape has the given TYPE, DIR and WIDTH."
   (concat
-   (cond ((eq 'arrow type)
-          (or (cdr (assoc dir '((right . ">")
-                                (left . "<")
-                                (up . "^")
-                                (down . "V"))))
-              "*"))
-         ((eq 'cap type)
-          (cdr (assoc dir '((right . "-")
-                            (left . "-")
-                            (up . "|")
-                            (down . "|")))))
-         (t "+"))
+   (pcase type
+     ('arrow (pcase dir
+               ('right ">")
+               ('left "<")
+               ('up "^")
+               ('down "V")
+               (_ "*")))
+     ('cap (pcase dir
+             ('right "-")
+             ('left "-")
+             ('up "|")
+             ('down "|")))
+     (_ "+"))
    (graph-fill ?- (- width 2))
    (when (> width 1)
      "+")))
@@ -298,9 +320,13 @@ Returns an alist with 'xcur, 'shapes, and 'drawn as keys."
   "Return a text string representing the TEXT for the item.
 
 It handles the special case of symbols, so that 'oak-tree ==> 'oak tree'."
-  (if (symbolp text)
-      (s-replace "-" " " (symbol-name text))
-    text))
+  (if (string-or-null-p text)
+      (if text
+          text
+        "")
+    (if (symbolp text)
+        (s-replace "-" " " (symbol-name text))
+      (format "%s" text))))
 
 (defun graph-center (lines width height)
   "Center the given LINES.
@@ -752,21 +778,156 @@ Nodes should be able to connect to their children in a tree with the least amoun
          (lev-chi (graph-lev-children packed)))
     (apply 'append lev-chi)))
 
+;;Functions specific to binary trees
+
+(defun graph--line-info-btree (top tx bottom bx in-line x)
+  "Arrange the given rows."
+  (if (and top (or (not bottom) (< (+ tx (graph-btreen-ind (car top)))
+                                   (+ bx (graph-btreen-ind (car bottom))))))
+      (let ((n (car top)))
+        (let-btreen (ind width left right) n
+          (append (if left
+                      (list (cons 'lbottom nil) (cons 'line (- (+ tx ind) bx 2))
+                            (cons 'ltop nil) (cons 'space width) (cons 'nop nil))
+                    (list (cons 'space (- (+ tx ind width) x)) (cons 'nop nil)))
+                  (graph--line-info-btree (cdr top) (+ tx ind width) bottom bx right (+ tx ind width)))))
+    (when bottom
+      (let ((n (car bottom)))
+        (let-btreen (ind width) n
+          (append (if in-line
+                      (list (cons 'rtop nil) (cons 'line (- (+ bx ind) tx 2))
+                            (cons 'rbottom nil) (cons 'space width) (cons 'nop nil))
+                    (list (cons 'space (- (+ bx ind width) x)) (cons 'nop nil)))
+                  (graph--line-info-btree top tx (cdr bottom) (+ bx ind width) nil (+ bx ind width))))))))
+
+(defun graph-line-info-btree (top bottom)
+  "Take TOP and BOTTOM row of a binary tree and arrange lines between them."
+  (graph--line-info-btree top 0 bottom 0 nil 0))
+
+(defun graph-btree-row-wid (row)
+  "Calculate the width of ROW in a binary tree."
+  (apply '+ (--map (+ (graph-btreen-ind it) (graph-btreen-width it)) row)))
+
+(defun graph-layout-btree (btree)
+  "Layout BTREE.
+
+Take a binary tree and convert it into rows.
+A row holds all the nodes of a certain level of the tree.
+The data for each item in a row is a vector, formatted as [indentation width text left-children? right-children?]"
+  (when btree
+    (let* ((cur (car btree))
+           (lno (graph-layout-btree (cadr btree)))
+           (lyes (graph-layout-btree (caddr btree)))
+           (wno (apply 'max 0 (-map 'graph-btree-row-wid lno)))
+           (wyes (apply 'max 0 (-map 'graph-btree-row-wid lyes)))
+           (wid (+ (length (graph-label-text cur)) 4))
+           (node-off (if lno
+                         (+ (graph-btree-row-wid (car lno)) 2)
+                       0))
+           (yes-off (max (+ 1 wno) (+ node-off wid 2))))
+      (cons (list (make-graph-btreen :ind node-off :width wid :text cur
+                                     :left (not (seq-empty-p lno))
+                                     :right (not (seq-empty-p lyes))))
+            (let ((m (max (length lno) (length lyes))))
+              (cl-mapcar (lambda (rno ryes)
+                           (if ryes
+                               (let ((node (car ryes))
+                                     (rest (cdr ryes)))
+                                 (let-btreen (ind width text left right) node
+                                   (append rno (cons (make-graph-btreen :ind (- (+ ind yes-off) (graph-btree-row-wid rno))
+                                                                        :width width :text text :left left :right right)
+                                                     rest))))
+                             rno))
+                         (-take m (apply 'append (-pad nil lno lyes)))
+                         (-take m (apply 'append (-pad nil lyes lno)))))))))
+
+(defun graph-sp (&optional n)
+  "Return 1 to N spaces in a string."
+  (if n
+      (graph-fill ?\s n)
+    (graph-sp 1)))
+
+(defmacro graph--concat (seq &rest body)
+  "Concatenate the elements in SEQ after applying BODY to them."
+  (declare (indent 1))
+  `(mapconcat (lambda (it) ,@body) ,seq ""))
+
+(defmacro graph--draw-row-line (row left right &rest middle)
+  "Draw a line of the given ROW.
+
+For each node use LEFT and RIGHT as borders
+and execute MIDDLE for the middle part.
+MIDDLE can acces 'ind, 'width, and 'text as variables of the current box."
+  `(graph--concat ,row
+     (let-btreen (ind width text) it
+       (concat (graph-fill ?\s ind) ,left ,@middle ,right))))
+
+(defun graph--draw-btree-nodes (row)
+  "Draw the boxes of the given ROW in a binary tree."
+  (concat (graph--draw-row-line row "+" "+" (graph-fill ?- (- width 2))) "\n"
+          (graph--draw-row-line row "| " " |" (graph-label-text text)) "\n"
+          (graph--draw-row-line row "+" "+" (graph-fill ?- (- width 2))) "\n"))
+
+(defun graph--draw-btree-lines (top bottom)
+  "Draw the lines between TOP and BOTTOM."
+  (let ((li (graph-line-info-btree top bottom)))
+                       (concat
+                        (graph--concat li
+                          (let ((type (car it))
+                                (n (cdr it)))
+                            (pcase type
+                              ('space (graph-sp n))
+                              ('lbottom (graph-sp))
+                              ('line (graph-fill ?_ n))
+                              ('ltop (graph-fill ?/))
+                              ('rtop (graph-fill ?\\))
+                              ('rbottom (graph-sp))
+                              ('nop nil))))
+                        "\n"
+                        (graph--concat li
+                          (let ((type (car it))
+                                (n (cdr it)))
+                            (pcase type
+                              ('space (graph-sp n))
+                              ('lbottom (graph-fill ?\/))
+                              ('line (graph-sp n))
+                              ('ltop (graph-sp))
+                              ('rtop (graph-sp))
+                              ('rbottom (graph-fill ?\\))
+                              ('nop nil))))
+                        "\n")))
+
+(defun graph-render-btree (rows)
+  "Render ROWS.
+
+ROWS contian the indentation, so this is just about rendering the data to text."
+  (let (drawn)
+    (cl-loop while rows do
+             (when rows
+               (let ((row (car rows))
+                     (next (cadr rows)))
+                 (setq drawn (concat drawn
+                                     (graph--draw-btree-nodes row)
+                                     (when next
+                                       (graph--draw-btree-lines row next)))))
+               (setq rows (cdr rows))))
+    drawn))
 
 ;;Exported functions for interfacing with this library
-;;;###autoload
 (defun graph-tree-to-shapes (tree)
   "Return shapes ready to be rendered with `graph-draw-shapes' for the given TREE."
   (graph-integer-shapes (graph--tree-to-shapes (graph-layout-tree (graph-idtree tree)))))
 
-;;;###autoload
 (defun graph-draw-tree (tree)
   "Render a TREE and return the text."
   (graph-draw-shapes (graph-tree-to-shapes tree)))
 
-;; (graph-draw-tree '((:north-america (:usa (:miami) (:seattle) (:idaho (:boise)))) (:europe (:germany) (:france (:paris) (:lyon) (:cannes)))))
-;; (graph-draw-tree '(("Eubacteria" ("Aquificae") ("Nitrospira") ("Proteobacteria") ("Chlamydiae") ("Actinobacteria")) ("Eukaryotes" ("Archaeplastida" ("Green Plants" ("Prasinophytes") ("Chlorophyceae") ("Trebouxiophyceae") ("Ulvophyceae") ("Streptohyta" ("Zygnematales") ("Charales") ("Embryophytes (land plants)"))) ("Rhodophyta") ("Glaucophytes")) ("Unikots" ("Opisthokonts" ("Animals" ("Bilateria" ("Ecdysozoa" ("Nematoda") ("Arthropoda")) ("Lophotrochozoa") ("Deuterostoma" ("Echinodermata") ("Hemichordata") ("Chordata" ("Urochordata") ("Cephalochordata") ("Yonnanozoon") ("Craniata")))) ("Cnidaria") ("Porifera")) ("Choanoflagellates") ("Filasterea") ("Ichthyosporea") ("Fungi") ("Nucleariidae"))) ("Chromalveolates" ("Rhizaria" ("Cercozoa") ("Foraminifera") ("Radiolaria")) ("Alveolates") ("Stramenopiles") ("Hacrobia")) ("Excavates" ("Malawimonads") ("Discicristates" ("Euglenozoa") ("Heterolobosea")) ("Fornicata")))))
+(defun graph-draw-binary-tree (btree)
+  "Draws a BTREE to the console.
 
+Nodes are in the form [text left right] where 'left' and 'right'
+are optional fields containing the children of this node."
+  (graph-render-btree (graph-layout-btree btree)))
 
 (provide 'graph)
 ;;; graph.el ends here

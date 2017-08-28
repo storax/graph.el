@@ -33,6 +33,10 @@
 (defalias 'mgs 'make-graph-shape)
 (defalias 'mgt 'make-graph-treen)
 
+(defun mgbt (ind width text &optional left right)
+  "Create a binary tree node with IND WIDTH TEXT RIGHT and LEFT."
+  (make-graph-btreen :ind ind :width width :text text :left left :right right))
+
 (ert-deftest let-shape ()
   "Test binding of shape slots."
   (should (= (let-shape (x y) (make-graph-shape :x 2 :y 5) (+ x y)) 7)))
@@ -40,6 +44,10 @@
 (ert-deftest let-treen ()
   "Test binding of tree node slots."
   (should (= (let-treen (x y) (make-graph-treen :x 2 :y 5) (+ x y)) 7)))
+
+(ert-deftest let-btreen ()
+  "Test binding of tree node slots."
+  (should (= (let-btreen (ind width) (make-graph-btreen :ind 2 :width 5) (+ ind width)) 7)))
 
 (ert-deftest half ()
   "Test dividing things by two."
@@ -51,6 +59,10 @@
   (should (equal "aaa" (graph-fill ?a 3)))
   (should (equal "" (graph-fill ?a 0)))
   (should (equal "" (graph-fill ?a -1))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Shapes
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (ert-deftest integer-shapes ()
   "Test rounding off shapes."
@@ -263,7 +275,9 @@
   "Test the special symbol case."
   (should (equal "asdf" (graph-label-text "asdf")))
   (should (equal "oak tree" (graph-label-text 'oak-tree)))
-  (should (equal "oaktree" (graph-label-text 'oaktree))))
+  (should (equal "oaktree" (graph-label-text 'oaktree)))
+  (should (equal "" (graph-label-text nil)))
+  (should (equal "5" (graph-label-text 5))))
 
 (ert-deftest horizontal ()
   "Test horizontal function"
@@ -308,6 +322,10 @@
   (should (equal 4 (graph-width-fn "")))
   (should (equal (+ 4 graph-ascii-wrap-threshold) (graph-width-fn "1234567890 1231246")))
   (should (equal 8 (graph-width-fn "asdf"))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Trees
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (ert-deftest -tree-to-shapes ()
   "Test converting to shapes."
@@ -624,6 +642,74 @@
                         +--------+
 "
     (graph-draw-tree '((:north-america (:usa (:miami) (:seattle) (:idaho (:boise)))) (:europe (:germany) (:france (:paris) (:lyon) (:cannes))))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Binary trees
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(ert-deftest line-info-btree ()
+  "Test arringing lines between two rows."
+  (should (equal '((space . 12) (nop) (lbottom) (line . 0)
+                   (ltop) (space . 5) (nop) (rtop) (line . 0)
+                   (rbottom) (space . 5) (nop))
+                 (graph-line-info-btree
+                  (list (mgbt 14 5 1 t t))
+                  (list (mgbt 7 5 2 t t) (mgbt 9 5 5))))))
+
+(ert-deftest btree-row-wid ()
+  "Calculate the width of a row."
+  (should (equal 38 (graph-btree-row-wid (list (mgbt 5 10 nil) (mgbt 20 3 nil))))))
+
+(ert-deftest layout-btree ()
+  "Test laying out a binary tree."
+  (should
+   (equal (list (list (mgbt 14 5 1 t t))
+            (list (mgbt 7 5 2 t t) (mgbt 9 5 5 nil nil))
+            (list (mgbt 0 5 3 nil nil) (mgbt 9 5 4 nil nil)))
+          (graph-layout-btree '(1 (2 (3) (4)) (5)))))
+  (should
+   (equal (list (list (mgbt 29 13 'organisms t t))
+                (list (mgbt 12 15 'prokaryotes t nil) (mgbt 58 14 'eukaryotes t t))
+                (list (mgbt 0 10 'e-coli nil nil) (mgbt 63 10 'plants t t) (mgbt 49 12 'animalia t t))
+                (list (mgbt 56 15 'seed-plants t t) (mgbt 15 9 'ferns nil nil)
+                      (mgbt 18 17 'invertebrates t t) (mgbt 27 11 'mammals t t))
+                (list (mgbt 44 10 'carrot nil nil) (mgbt 19 12 'oak-tree nil nil) (mgbt 16 10 'sponge nil nil)
+                      (mgbt 21 8 'worm nil nil) (mgbt 6 9 'mouse nil nil) (mgbt 31 8 'apes t t))
+                (list (mgbt 170 14 'chimpanzee nil nil) (mgbt 12 9 'human nil nil)))
+          (graph-layout-btree
+           '(organisms (prokaryotes (e-coli))
+                       (eukaryotes (plants (seed-plants (carrot) (oak-tree))
+                                           (ferns))
+                                   (animalia (invertebrates (sponge)
+                                                            (worm))
+                                             (mammals (mouse)
+                                                      (apes (chimpanzee)
+                                                            (human))))))))))
+
+(ert-deftest sp ()
+  "Test spacing."
+  (should (equal "   " (graph-sp 3)))
+  (should (equal " " (graph-sp))))
+
+(ert-deftest draw-btree ()
+  "Test drawing a binary tree."
+  (should
+   (equal
+"              +---+
+              | 1 |
+              +---+
+             /     \\      
+            /       \\     
+       +---+         +---+
+       | 2 |         | 5 |
+       +---+         +---+
+      /     \\             
+     /       \\            
++---+         +---+
+| 3 |         | 4 |
++---+         +---+
+"
+    (graph-draw-binary-tree '(1 (2 (3) (4)) (5))))))
 
 (provide 'graph-test)
 
