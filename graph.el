@@ -43,6 +43,16 @@
 
 (cl-defstruct graph-btreen ind width text left right)
 
+(defun graph--letbinding-gen (type binding var)
+  "Helper for creating bindings for structures of TYPE.
+
+BINDING is a list of slots or cons of (slot symbol).
+VAR is the variable to bind."
+  (--map (if (consp it)
+             (list (car it) `(cl-struct-slot-value ',type ',(cdr it) ,var))
+           (list it `(cl-struct-slot-value ',type ',it ,var)))
+         binding))
+
 (defmacro let-shape (binding shape &rest body)
   "Bind the slots in BINDING to the values in SHAPE and execute BODY.
 
@@ -58,7 +68,7 @@ expands to:
     (message \"%s %s\" x y))"
   (declare (indent defun))
   `(let ((shape ,shape))
-     (let ,(mapcar (lambda (x) `(,x (cl-struct-slot-value 'graph-shape ',x shape))) binding)
+     (let ,(graph--letbinding-gen 'graph-shape binding 'shape)
        ,@body)))
 
 (defmacro let-treen (binding treen &rest body)
@@ -76,7 +86,7 @@ expands to:
     (message \"%s %s\" x y))"
   (declare (indent defun))
   `(let ((treen ,treen))
-     (let ,(mapcar (lambda (x) `(,x (cl-struct-slot-value 'graph-treen ',x treen))) binding)
+     (let ,(graph--letbinding-gen 'graph-treen binding 'treen)
        ,@body)))
 
 (defmacro let-btreen (binding btreen &rest body)
@@ -94,7 +104,7 @@ expands to:
     (message \"%s %s\" x y))"
   (declare (indent defun))
   `(let ((btreen ,btreen))
-     (let ,(mapcar (lambda (x) `(,x (cl-struct-slot-value 'graph-btreen ',x btreen))) binding)
+     (let ,(graph--letbinding-gen 'graph-btreen binding 'btreen)
        ,@body)))
 
 (defun graph-half (x)
@@ -110,18 +120,17 @@ expands to:
   "Take a sequence of SHAPES and floor all the dimensions for ASCII rendering.
 
 See `graph-shape'."
-  (mapcar (lambda (shape)
-            (let-shape (x y width height type) shape
-              (let ((nu-x (floor x))
-                    (nu-y (floor y))
-                    (newitem (copy-graph-shape shape)))
-                (setf (graph-shape-x newitem) nu-x
-                      (graph-shape-y newitem) nu-y
-                      (graph-shape-width newitem) (- (floor (+ x width)) nu-x)
-                      (graph-shape-height newitem) (- (floor (+ y height)) nu-y))
-                newitem)))
-          shapes))
-
+  (--map
+   (let-shape (x y width height type) it
+     (let ((nu-x (floor x))
+           (nu-y (floor y))
+           (newitem (copy-graph-shape it)))
+       (setf (graph-shape-x newitem) nu-x
+             (graph-shape-y newitem) nu-y
+             (graph-shape-width newitem) (- (floor (+ x width)) nu-x)
+             (graph-shape-height newitem) (- (floor (+ y height)) nu-y))
+       newitem))
+   shapes))
 
 (defun graph-rect-relation (ypos y height)
   "Calculate whether a rectangle intersects a YPOS.
@@ -136,15 +145,11 @@ Returns 'on, 'in or 'nil."
 
 (defun graph-shapes-height (shapes)
   "Return the maxium y value that is covered by the given SHAPES."
-  (apply 'max
-         (mapcar (lambda (shape) (let-shape (y height) shape (+ y height)))
-                 shapes)))
+  (apply 'max (--map (let-shape (y height) it (+ y height)) shapes)))
 
 (defun graph-shapes-width (shapes)
   "Return the maximum x value that is covered by the given SHAPES."
-  (apply 'max
-         (mapcar (lambda (shape) (let-shape (x width) shape (+ x width)))
-                 shapes)))
+  (apply 'max (--map (let-shape (x width) it (+ x width)) shapes)))
 
 (defun graph-iter-height (shapes)
   "Iterate over all y values for the height of the given SHAPES.
@@ -164,15 +169,11 @@ If x value is the same the narrower shape takes precedence.
 If they are the same width the higher shape takes precedence."
   (sort (copy-sequence shapes)
         (lambda (a b)
-          (let ((ax (graph-shape-x a))
-                (bx (graph-shape-x b))
-                (aw (graph-shape-width a))
-                (bw (graph-shape-width b))
-                (ah (graph-shape-height a))
-                (bh (graph-shape-height b)))
-            (or (< ax bx)
-                (and (= ax bx) (< aw bw))
-                (and (= ax bx) (= aw bw) (> ah bh)))))))
+          (let-shape ((ax . x) (aw . width) (ah . height)) a
+            (let-shape ((bx . x) (bw . width) (bh . height)) b
+              (or (< ax bx)
+                  (and (= ax bx) (< aw bw))
+                  (and (= ax bx) (= aw bw) (> ah bh))))))))
 
 (defun graph-draw-shapes (shapes)
   "Render a list of SHAPES into text.
@@ -211,7 +212,7 @@ If X is smaller than XCUR we have to drop that part
 because we already drawn over that area.
 Else we just return S."
   (if (< x xcur)
-      (cl-subseq s (min (length s) (- xcur x)))
+      (substring s (min (length s) (- xcur x)))
     s))
 
 (defun graph-get-next-shapes-to-draw (overlapping shape more)
@@ -279,12 +280,10 @@ If non-nil, the shape is ON-TOP.
 SHAPES are the other shapes that we have to check for overlapping."
   (or
    (dolist (shape shapes)
-    (let ((x2 (graph-shape-x shape))
-          (width2 (graph-shape-width shape))
-          (on-top2 (graph-shape-on-top shape)))
-      (when (<= width2 (+ x width))
-        (when (and (<= (+ x2 width2) (+ x width)) (or (not on-top) on-top2))
-          (return (list (< (+ x2 width2) (+ x width)) (substring s 0 (min (length s) (- x2 x)))))))))
+     (let-shape ((x2 . x) (width2 . width) (on-top2 . on-top)) shape
+       (when (<= width2 (+ x width))
+         (when (and (<= (+ x2 width2) (+ x width)) (or (not on-top) on-top2))
+           (return (list (< (+ x2 width2) (+ x width)) (substring s 0 (min (length s) (- x2 x)))))))))
    (list nil s)))
 
 (defun graph-draw-shapes-pos (ypos xcur shapes)
@@ -311,19 +310,14 @@ Returns an alist with 'xcur, 'shapes, and 'drawn as keys."
 
 (defun graph-numbered (lst)
   "Enumerate the given LST."
-  (let ((counter -1))
-    (mapcar (lambda (elem)
-              (setq counter (+ counter 1))
-              (cons counter elem)) lst)))
+  (-map-indexed 'cons lst))
 
 (defun graph-label-text (text)
   "Return a text string representing the TEXT for the item.
 
 It handles the special case of symbols, so that 'oak-tree ==> 'oak tree'."
   (if (string-or-null-p text)
-      (if text
-          text
-        "")
+      (or text "")
     (if (symbolp text)
         (s-replace "-" " " (symbol-name text))
       (format "%s" text))))
@@ -511,10 +505,9 @@ This is needed since items in the same row and their widths will affect the spac
           (graph-make-rows
            (seq-mapcat (lambda (node)
                          (let-treen (id children) node
-                           (mapcar (lambda (child)
-                                     (let ((newc (copy-graph-treen child)))
-                                       (setf (graph-treen-parent newc) id)
-                                       newc))
+                           (--map (let ((newc (copy-graph-treen it)))
+                                    (setf (graph-treen-parent newc) id)
+                              newc)
                                    children)))
                        tree)))))
 
@@ -522,16 +515,12 @@ This is needed since items in the same row and their widths will affect the spac
   "Calculate the wrapped text of each tree item in ROWS and their height.
 
 The height depends on how the text is broken into lines."
-  (mapcar
-   (lambda (row)
-     (mapcar (lambda (item)
-               (let ((text (graph-treen-text item))
-                     (newitem (copy-graph-treen item)))
-                 (setf (graph-treen-wrapped-text newitem) (graph-wrap-fn text)
-                       (graph-treen-height newitem) (graph-height-fn text))
-                 newitem))
-             row))
-   rows))
+  (--map (--map (let ((text (graph-treen-text it))
+                      (newitem (copy-graph-treen it)))
+                  (setf (graph-treen-wrapped-text newitem) (graph-wrap-fn text)
+                        (graph-treen-height newitem) (graph-height-fn text))
+                  newitem)
+                it) rows))
 
 (defun graph-row-pos (row y)
   "Calculate preliminary x positions for nodes in ROW.
@@ -539,17 +528,16 @@ The height depends on how the text is broken into lines."
 Y is unused.
 This will be refined later by the calculations from `graph-space' and `graph-space-row'."
   (let ((x 0))
-    (mapcar
-     (lambda (item)
-       (let* ((text (graph-treen-text item))
-              (w (graph-width-fn text))
-              (newitem (copy-graph-treen item))
-              (oldx x))
-         (setq x (+ oldx w graph-node-padding))
-         (setf (graph-treen-x newitem) oldx
-               (graph-treen-width newitem) w
-               (graph-treen-height newitem) (graph-height-fn text))
-         newitem))
+    (--map
+     (let* ((text (graph-treen-text it))
+            (w (graph-width-fn text))
+            (newitem (copy-graph-treen it))
+            (oldx x))
+       (setq x (+ oldx w graph-node-padding))
+       (setf (graph-treen-x newitem) oldx
+             (graph-treen-width newitem) w
+             (graph-treen-height newitem) (graph-height-fn text))
+       newitem)
      row)))
 
 (defun graph-parent-p (child parent)
@@ -577,17 +565,15 @@ FUN is either `graph-child-p' or `graph-parent-p'."
      (lambda (item)
        (let-treen (width id) item
          (let* ((newitem (copy-graph-treen item))
-                (children (seq-filter (lambda (row) (funcall fun row item)) target-row))
-                (child-pos (mapcar (lambda (item)
-                                     (+ (graph-treen-x item) (graph-half (graph-treen-width item))))
+                (children (--filter (funcall fun it item) target-row))
+                (child-pos (--map (+ (graph-treen-x it) (graph-half (graph-treen-width it)))
                                    children))
                 (nu-remaining (- remaining width graph-node-padding))
                 (nu-x (if child-pos
                           (let* ((child (car children))
-                                 (siblings (seq-filter (lambda (item) (funcall fun child item)) row))
+                                 (siblings (--filter (funcall fun child it) row))
                                  (left-scoot (if (and (< 1 (length siblings)) (= (graph-treen-id (car siblings)) id))
-                                                 (graph-half (- (apply '+ (mapcar (lambda (item)
-                                                                                    (+ (graph-treen-width item) graph-node-padding))
+                                                 (graph-half (- (apply '+ (--map (+ (graph-treen-width it) graph-node-padding)
                                                                                   siblings))
                                                                 graph-node-padding (graph-treen-width child)))
                                                0))
@@ -623,16 +609,15 @@ FUN is either `graph-child-p' or `graph-parent-p'."
 (defun graph-horz-lines (rows)
   "Calculate the left and right extents of the horizontal lines below nodes in ROWS that lead to their children."
   (cl-mapcar (lambda (cur next)
-               (mapcar (lambda (cur)
-                         (let* ((id (graph-treen-id cur))
-                                (ranges (cons (graph-bounds cur)
-                                              (cl-loop for chi in next when
-                                                       (= id (graph-treen-parent chi))
-                                                       collect (graph-bounds chi))))
-                                (newcur (copy-graph-treen cur)))
-                           (setf (graph-treen-line-left newcur) (- (apply 'min ranges) (graph-half graph-line-wid))
-                                 (graph-treen-line-right newcur) (+ (apply 'max ranges) (graph-half graph-line-wid)))
-                           newcur))
+               (--map (let* ((id (graph-treen-id it))
+                             (ranges (cons (graph-bounds it)
+                                           (cl-loop for chi in next when
+                                                    (= id (graph-treen-parent chi))
+                                                    collect (graph-bounds chi))))
+                             (newcur (copy-graph-treen it)))
+                  (setf (graph-treen-line-left newcur) (- (apply 'min ranges) (graph-half graph-line-wid))
+                        (graph-treen-line-right newcur) (+ (apply 'max ranges) (graph-half graph-line-wid)))
+                  newcur)
                        cur))
              rows
              (append (cdr rows) (list (list)))))
@@ -641,40 +626,36 @@ FUN is either `graph-child-p' or `graph-parent-p'."
   "Stack horizontal lines of the LINED shapes vertically in an optimal fashion.
 
 Nodes should be able to connect to their children in a tree with the least amount of inbetween space."
-  (mapcar
-   (lambda (row)
-     (let ((group-right 0)
-           (line-y 0))
-       (mapcar
-        (lambda (item)
-          (let-treen (leaf line-left line-right x width) item
-            (let ((newitem (copy-graph-treen item)))
-              (cond (leaf item)
-                    ((and group-right (> (+ group-right graph-line-wid) line-left))
-                     (setq line-y (if (<= (+ x (graph-half width)) (+ group-right graph-line-padding))
-                                      (- line-y 1)
-                                    (+ line-y 1))))
-                    (t (setq line-y 0)))
-              (setq group-right (max line-right group-right))
-              (setf (graph-treen-line-y newitem) line-y)
-              newitem)))
-        row)))
-   lined))
+  (--map (let ((group-right 0)
+               (line-y 0))
+     (--map (let-treen (leaf line-left line-right x width) it
+              (let ((newitem (copy-graph-treen it)))
+                (cond (leaf it)
+                      ((and group-right (> (+ group-right graph-line-wid) line-left))
+                       (setq line-y (if (<= (+ x (graph-half width)) (+ group-right graph-line-padding))
+                                        (- line-y 1)
+                                      (+ line-y 1))))
+                      (t (setq line-y 0)))
+                (setq group-right (max line-right group-right))
+                (setf (graph-treen-line-y newitem) line-y)
+                newitem))
+            it))
+         lined))
 
 (defun graph-lev-children (levlines)
   "Update children with the level of the horizontal line of their parents."
   (cl-mapcar
    (lambda (cur par)
-     (mapcar (lambda (item)
-               (let* ((newitem (copy-graph-treen item))
-                      (parent (graph-treen-parent item))
-                      (k (car (seq-filter (lambda (other) (= (graph-treen-id other) parent)) par)))
-                      (liney (when k (graph-treen-line-ypos k))))
-                 (setf (graph-treen-parent-line-y newitem) liney)
-                 newitem))
-             cur))
+     (--map
+      (let* ((newitem (copy-graph-treen it))
+             (parent (graph-treen-parent it))
+             (k (car (--filter (= (graph-treen-id it) parent) par)))
+             (liney (when k (graph-treen-line-ypos k))))
+        (setf (graph-treen-parent-line-y newitem) liney)
+        newitem)
+      cur))
    levlines
-   (cons (list) levlines)))
+   (cons nil levlines)))
 
 (defun graph-place-boxes (scan acc row)
   "Place boxes as high as possible during tree packing."
@@ -902,15 +883,12 @@ MIDDLE can acces 'ind, 'width, and 'text as variables of the current box."
 
 ROWS contian the indentation, so this is just about rendering the data to text."
   (let (drawn)
-    (cl-loop while rows do
-             (when rows
-               (let ((row (car rows))
-                     (next (cadr rows)))
-                 (setq drawn (concat drawn
-                                     (graph--draw-btree-nodes row)
-                                     (when next
-                                       (graph--draw-btree-lines row next)))))
-               (setq rows (cdr rows))))
+    (while rows
+      (let ((row (car rows))
+            (next (cadr rows)))
+        (setq drawn (concat drawn (graph--draw-btree-nodes row)
+                            (when next (graph--draw-btree-lines row next)))))
+      (setq rows (cdr rows)))
     drawn))
 
 ;;Exported functions for interfacing with this library
