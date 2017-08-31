@@ -226,27 +226,87 @@ MORE is the rest of the shapes."
       (append (list (car more) shape) (cdr more))
     more))
 
+(defun graph-draw-arrow (dir)
+  "Draw an arrow pointing in the given DIR.
+
+DIR is either 'right, 'left, 'up, 'down
+or something else if there is no clear direction."
+  (pcase dir
+    ('right ">")
+    ('left "<")
+    ('up "^")
+    ('down "V")
+    (_ "*")))
+
+(defvar graph-draw-arrow-fn 'graph-draw-arrow
+  "Function for drawing an arrow.")
+
+(defun graph-draw-cap (dir)
+  "Draw a cap in the given DIR.
+
+DIR is either 'right, 'left, 'up, or 'down."
+  (pcase dir
+    ('right "-")
+    ('left "-")
+    ('up "|")
+    ('down "|")))
+
+(defvar graph-draw-cap-fn 'graph-draw-cap
+  "Function for drawing a cap.")
+
+(defun graph-draw-other-type-edge (type)
+  "Draw the border edge of misc types.
+
+TYPE could be rect or nil."
+  "+")
+
+(defvar graph-draw-other-type-edge-fn 'graph-draw-other-type-edge
+  "Function for drawing a border edge of misc types.")
+
+(defun graph-draw-border-mid (width)
+  "Draw border middle of given WIDTH.
+
+If WIDTH is 0 or negative, return an empty string."
+  (graph-fill ?- width))
+
+(defvar graph-draw-border-mid-fn 'graph-draw-border-mid
+  "Function for drawing the border middle part of a shape.")
+
 (defun graph-draw-border (type dir width)
   "Draw the border of a shape.
 
 Shape has the given TYPE, DIR and WIDTH."
   (concat
    (pcase type
-     ('arrow (pcase dir
-               ('right ">")
-               ('left "<")
-               ('up "^")
-               ('down "V")
-               (_ "*")))
-     ('cap (pcase dir
-             ('right "-")
-             ('left "-")
-             ('up "|")
-             ('down "|")))
-     (_ "+"))
-   (graph-fill ?- (- width 2))
+     ('arrow (funcall graph-draw-arrow-fn dir))
+     ('cap (funcall graph-draw-cap-fn dir))
+     (_ (funcall graph-draw-other-type-edge-fn type)))
+   (funcall graph-draw-border-mid-fn (- width 2))
    (when (> width 1)
-     "+")))
+     (funcall graph-draw-other-type-edge-fn type))))
+
+(defun graph-draw-shape-side-border ()
+  "Draw the side border of a shape."
+  "|")
+
+(defvar graph-draw-shape-side-border-fn 'graph-draw-shape-side-border
+  "Function for drawing the side border of a shape.")
+
+(defun graph-draw-shape-space (width)
+  "Draw WIDTH amount of space of a shape.
+
+If WIDTH is negative or 0 return an empty string."
+  (graph-fill ?\s width))
+
+(defvar graph-draw-shape-space-fn 'graph-draw-shape-space
+  "Function for drawing the empty space of a shape.")
+
+(defun graph-draw-text (text)
+  "Draw the given text of a shape."
+  text)
+
+(defvar graph-draw-text-fn 'graph-draw-text
+  "Function for drawing text.")
 
 (defun graph-draw-body-line (ypos y width text)
   "Draw the body of a shape for a given YPOS.
@@ -255,13 +315,14 @@ Y is the y position of the shape.
 WIDTH is the width of the shape.
 TEXT is the text of the shape."
   (concat
-   "|"
+   (funcall graph-draw-shape-side-border-fn)
    (when (> width 1)
      (let* ((index (- ypos y 1))
             (s (if (>= index (length text))
                    ""
-                 (elt text index))))
-       (concat s (graph-fill ?\s (- width (length s) 2)) "|")))))
+                 (funcall graph-draw-text-fn (elt text index)))))
+       (concat s (funcall graph-draw-shape-space-fn (- width (length s) 2))
+               (funcall graph-draw-shape-side-border-fn))))))
 
 (defun graph-draw-at-ypos (ypos shape)
   "Draw at YPOS the given SHAPE."
