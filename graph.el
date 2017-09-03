@@ -34,12 +34,12 @@
 (eval-when-compile (require 'cl-lib))
 (eval-when-compile (require 'cl))
 
-(cl-defstruct graph-shape x y width height type text dir on-top)
+(cl-defstruct graph-shape x y width height type text dir on-top data)
 
 (cl-defstruct graph-treen
   id x y width height text wrapped-text
   line-right line-left line-y line-ypos
-  leaf parent parent-line-y children)
+  leaf parent parent-line-y children data)
 
 (cl-defstruct graph-btreen ind width text left right)
 
@@ -532,7 +532,7 @@ THe line should not intersec with the scan."
   (apply 'append
          (mapcar
           (lambda (node)
-            (let-treen (x y width height text line-left line-right line-ypos leaf parent-line-y) node
+            (let-treen (x y width height text line-left line-right line-ypos leaf parent-line-y data) node
               (append
                (when parent-line-y
                  (list (make-graph-shape :type 'rect
@@ -541,7 +541,7 @@ THe line should not intersec with the scan."
                                          :width graph-line-wid
                                          :height (+ 1 (- y parent-line-y)))))
                (list (make-graph-shape :type 'rect :text (graph-wrap-fn text width height)
-                                       :x x :y y :width width :height height))
+                                       :x x :y y :width width :height height :data data))
                (unless leaf
                  (list (make-graph-shape :type 'rect
                                          :x line-left :y line-ypos
@@ -560,8 +560,8 @@ THe line should not intersec with the scan."
 This is needed since items in the same row and their widths will affect the spacing and layout of items."
   (when tree
     (cons (mapcar (lambda (node)
-                    (let-treen (text id parent children) node
-                      (make-graph-treen :text text :id id :parent parent :leaf (seq-empty-p children))))
+                    (let-treen (text id parent children data) node
+                      (make-graph-treen :text text :id id :parent parent :leaf (seq-empty-p children) :data data)))
                   tree)
           (graph-make-rows
            (seq-mapcat (lambda (node)
@@ -776,12 +776,14 @@ Nodes should be able to connect to their children in a tree with the least amoun
   (let ((labeled
          (mapcar (lambda (nodes)
                    (let* ((nam (car nodes))
+                          (data (if (consp nam) (cdr nam) nil))
+                          (nam (if (consp nam) (car nam) nam))
                           (chi (cdr nodes))
                           (nchildren (graph--idtree (+ 1 n) chi))
                           (newn (car nchildren))
                           (children (cdr nchildren))
                           (node (make-graph-treen :text (graph-label-text nam)
-                                                  :id n :children children)))
+                                                  :id n :children children :data data)))
                      (setq n newn)
                      node))
                  tree)))

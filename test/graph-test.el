@@ -332,10 +332,10 @@
   (let ((tree (list
                (mgt :text "asdf" :x 2 :y 6 :width 10 :height 10
                                  :line-right 15 :line-left 10 :line-ypos 30
-                                 :leaf nil :parent-line-y 2))))
+                                 :leaf nil :parent-line-y 2 :data 'foobar))))
     (should (equal (list
                     (mgs :x 6.5 :y 2 :height 5 :width 1 :type 'rect)
-                    (mgs :x 2 :y 6 :height 10 :width 10 :type 'rect :text '(" " " " " " "  asdf"))
+                    (mgs :x 2 :y 6 :height 10 :width 10 :type 'rect :text '(" " " " " " "  asdf") :data 'foobar)
                     (mgs :x 10 :y 30 :height 1 :width 5 :type 'rect)
                     (mgs :x 6.5 :y 15 :height 16 :width 1 :type 'rect))
                    (graph--tree-to-shapes tree)))))
@@ -346,7 +346,7 @@
                   (list (mgt :id 1 :text "asdf" :leaf nil)
                         (mgt :id 4 :text "4" :leaf nil))
                   (list (mgt :id 2 :text "123" :leaf t :parent 1)
-                        (mgt :id 3 :text "3" :leaf t :parent 1)
+                        (mgt :id 3 :text "3" :leaf t :parent 1 :data 'foobar)
                         (mgt :id 5 :text "5" :leaf t :parent 4)
                         (mgt :id 6 :text "6" :leaf t :parent 4)))
                  (graph-make-rows
@@ -354,7 +354,7 @@
                    (mgt :id 1 :text "asdf"
                                      :children (list
                                                 (mgt :id 2 :text "123")
-                                                (mgt :id 3 :text "3")))
+                                                (mgt :id 3 :text "3" :data 'foobar)))
                    (mgt :id 4 :text "4"
                                           :children (list
                                                      (mgt :id 5 :text "5")
@@ -588,8 +588,8 @@
                    :line-right 62.0 :line-left 39.5 :line-y 0 :parent 6)))))))
 
 
-(defun mkn (id text &optional children)
-  (mgt :id id :text text :children children))
+(defun mkn (id text &optional children data)
+  (mgt :id id :text text :children children :data data))
 
 (ert-deftest idtree ()
   "Test the initial conversion into nodes."
@@ -612,7 +612,9 @@
                                     (miami) (seattle) (idaho
                                                        (boise))))
                     (europe (germany) (france
-                                       (paris) (lyon) (cannes))))))))
+                                       (paris) (lyon) (cannes)))))))
+  (should (equal (list (mkn 0 "north america" nil 'foobar))
+                 (graph-idtree '(((north-america . foobar)))))))
 
 (ert-deftest draw-tree ()
   "Test drawing a tree."
