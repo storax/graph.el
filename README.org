@@ -10,7 +10,7 @@ The algorithm is a port from [[https://github.com/drcode/vijual][vijual]], a Clo
 who deserves most of the credit.
 
 ** Features
-- [X] Text rendering
+- [X] Customizable text rendering
 - [ ] Image rendering
 - [X] Trees
 - [ ] Undirected graphs
