@@ -180,3 +180,72 @@ You can render binary trees as text with =graph-draw-binary-tree=:
                                                                                                                                                                           | chimpanzee |            | human |
                                                                                                                                                                           +------------+            +-------+
 #+END_EXAMPLE
+** Custom text rendering
+*This is currently not available for binary trees!*
+
+All drawing operations can be customized by setting the
+respective drawing function variable. You can associate arbitrary data
+with shapes/nodes, which will be passed to each drawing function.
+The default functions ignore the user data but it can be used in
+when customizing the drawing.
+
+To add custom data, use a cons cell instead of a string for a node:
+#+BEGIN_SRC emacs-lisp
+(graph-draw-tree '((("parent with data" . datadatadata) ("plain child")
+                                                        (("child With data" . somedata)))))
+#+END_SRC
+The parent node and the second child have some data associated with them. This data will get passed
+to all of the drawing functions. By customizing these functions, you can draw colored trees/shapes.
+
+You can also layout a tree once, and just re-render the shapes. The data is available under the =:data= slot:
+#+BEGIN_SRC emacs-lisp
+  (let* ((shapes (graph-tree-to-shapes '((("node with data" . somedata)))))
+         (data (graph-shape-data (car shapes))))
+    (setf (graph-shape-data (car shapes) 'newdata))
+    (graph-draw-shapes shapes))
+#+END_SRC
+In line 1, we layout a tree and convert it into shapes.
+The user-data can be accessed via =graph-shape-data= (see line 2).
+You can also modify the data as shown in line 3 and finally re-render
+the shapes with =graph-draw-shapes=.
+
+Below is a list of all drawing functions that can be customized:
+*** =graph-draw-customize-fn=
+This is a wrapper around all drawing functions.
+You can conviniently change customize all drawing globally by setting this function.
+The function will be called with the drawn text plus optional user-data that was associated
+with the shape.
+#+BEGIN_SRC emacs-lisp
+  (let ((graph-draw-custom-fn (lambda (drawn data) (propertize drawn 'font-lock-face `(:foreground ,data)))))
+    (graph-draw-tree '((("rednode" . "red") (("bluenode". "blue"))))))
+#+END_SRC
+*** =graph-draw-arrow-fn=
+This function is called with a direction and the user-data and should
+return a string of length 1. The direction can be ='up=, ='down=, ='left=, ='right=
+or an arbitrary direction.
+*** =graph-draw-cap-fn=
+This function is called with a direction and the user-data and should
+return a string of length 1. The direction can be ='up=, ='down=, ='left, or ='right=.
+*** =graph-draw-other-type-edge-fn=
+This function is called with a type and the user-data and should
+return a string of length 1. It's used to draw the corners of boxes for example.
+*** =graph-draw-border-mid-fn=
+This function is called with a width and the user-data and should
+return a string of length of the given width.
+It draws the border of a box or shape between the corners.
+*** =graph-draw-shape-side-border-fn=
+This function is called with the user-data and should return a string of length 1.
+It is used to draw the side border of a box.
+*** =graph-draw-shape-space=
+This function is called with a width and the user-data and should
+return a string of length of the given width.
+It's used to draw the empty space of a shape.
+*** =graph-draw-text-fn=
+This function is called with some text to render and the user-data.
+*** Customization variables
+There are a couple of variables to customize the layout.
+- =graph-ascii-wrap-threshold=: text is wrapped after the number of characters specified.
+- =graph-node-padding=: horizontal padding between nodes
+- =graph-row-padding=: vertical padding between rows
+- =graph-line-wid=: Line width
+- =graph-line-padding=: Space between lines

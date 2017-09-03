@@ -271,6 +271,26 @@
              (mgs :x 13 :y 6 :width 8 :height 1 :type 'rect)
              (mgs :x 7 :y 11 :width 1 :height 4 :type 'rect))))))
 
+(ert-deftest draw-custom ()
+  "Test drawing of a shape with custom data"
+  (let ((graph-draw-arrow-fn (lambda (dir data) (let ((text "<"))
+                                                  (put-text-property 0 (length text) 'data data text)
+                                                  text))))
+    (should (equal 'foobar
+                   (get-text-property 0 'data (graph-draw-shapes
+                                               (list (mgs :x 0 :y 0 :width 1 :height 1
+                                                          :type 'arrow :dir 'left :data 'foobar))))))))
+
+(ert-deftest draw-custom-wrap ()
+  "Test using a simple wrapper for all drawings."
+  (let ((graph-draw-custom-fn (lambda (drawn data)
+                                   (put-text-property 0 (length drawn) 'data data drawn)
+                                   drawn)))
+    (should (equal 'foobar
+                   (get-text-property 0 'data (graph-draw-shapes
+                                               (list (mgs :x 0 :y 0 :width 3 :height 3
+                                                          :type 'rect :data 'foobar))))))))
+
 (ert-deftest label-text ()
   "Test the special symbol case."
   (should (equal "asdf" (graph-label-text "asdf")))

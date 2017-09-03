@@ -226,11 +226,25 @@ MORE is the rest of the shapes."
       (append (list (car more) shape) (cdr more))
     more))
 
-(defun graph-draw-arrow (dir)
+(defun graph-draw-custom (drawn data)
+  "Wrapper function for all shape drawing functions.
+
+This is called with the drawn text plus the user data if any for
+the shape that is drawn."
+  drawn)
+
+(defvar graph-draw-custom-fn 'graph-draw-custom
+  "Wrapper function for all shape drawing functions.
+
+This is called with the drawn text plus the user data if any for
+the shape that is drawn.")
+
+(defun graph-draw-arrow (dir data)
   "Draw an arrow pointing in the given DIR.
 
 DIR is either 'right, 'left, 'up, 'down
-or something else if there is no clear direction."
+or something else if there is no clear direction.
+DATA is arbitrary user data associated witht the shape."
   (pcase dir
     ('right ">")
     ('left "<")
@@ -241,10 +255,11 @@ or something else if there is no clear direction."
 (defvar graph-draw-arrow-fn 'graph-draw-arrow
   "Function for drawing an arrow.")
 
-(defun graph-draw-cap (dir)
+(defun graph-draw-cap (dir data)
   "Draw a cap in the given DIR.
 
-DIR is either 'right, 'left, 'up, or 'down."
+DIR is either 'right, 'left, 'up, or 'down.
+DATA is arbitrary user data associated witht the shape."
   (pcase dir
     ('right "-")
     ('left "-")
@@ -254,82 +269,94 @@ DIR is either 'right, 'left, 'up, or 'down."
 (defvar graph-draw-cap-fn 'graph-draw-cap
   "Function for drawing a cap.")
 
-(defun graph-draw-other-type-edge (type)
+(defun graph-draw-other-type-edge (type data)
   "Draw the border edge of misc types.
 
-TYPE could be rect or nil."
+TYPE could be rect or nil.
+DATA is arbitrary user data associated witht the shape."
   "+")
 
 (defvar graph-draw-other-type-edge-fn 'graph-draw-other-type-edge
   "Function for drawing a border edge of misc types.")
 
-(defun graph-draw-border-mid (width)
+(defun graph-draw-border-mid (width data)
   "Draw border middle of given WIDTH.
 
-If WIDTH is 0 or negative, return an empty string."
+If WIDTH is 0 or negative, return an empty string.
+DATA is arbitrary user data associated witht the shape."
   (graph-fill ?- width))
 
 (defvar graph-draw-border-mid-fn 'graph-draw-border-mid
   "Function for drawing the border middle part of a shape.")
 
-(defun graph-draw-border (type dir width)
+(defun graph-draw-wrapped (func &rest arguments)
+  (funcall graph-draw-custom-fn (apply func arguments) (car (last arguments))))
+
+(defun graph-draw-border (type dir width &optional data)
   "Draw the border of a shape.
 
-Shape has the given TYPE, DIR and WIDTH."
+Shape has the given TYPE, DIR and WIDTH.
+DATA is arbitrary user data associated witht the shape."
   (concat
    (pcase type
-     ('arrow (funcall graph-draw-arrow-fn dir))
-     ('cap (funcall graph-draw-cap-fn dir))
-     (_ (funcall graph-draw-other-type-edge-fn type)))
-   (funcall graph-draw-border-mid-fn (- width 2))
+     ('arrow (graph-draw-wrapped graph-draw-arrow-fn dir data))
+     ('cap (graph-draw-wrapped graph-draw-cap-fn dir data))
+     (_ (graph-draw-wrapped graph-draw-other-type-edge-fn type data)))
+   (graph-draw-wrapped graph-draw-border-mid-fn (- width 2) data)
    (when (> width 1)
-     (funcall graph-draw-other-type-edge-fn type))))
+     (graph-draw-wrapped graph-draw-other-type-edge-fn type data))))
 
-(defun graph-draw-shape-side-border ()
-  "Draw the side border of a shape."
+(defun graph-draw-shape-side-border (data)
+  "Draw the side border of a shape.
+
+DATA is arbitrary user data associated witht the shape."
   "|")
 
 (defvar graph-draw-shape-side-border-fn 'graph-draw-shape-side-border
   "Function for drawing the side border of a shape.")
 
-(defun graph-draw-shape-space (width)
+(defun graph-draw-shape-space (width data)
   "Draw WIDTH amount of space of a shape.
 
-If WIDTH is negative or 0 return an empty string."
+If WIDTH is negative or 0 return an empty string.
+DATA is arbitrary user data associated witht the shape."
   (graph-fill ?\s width))
 
 (defvar graph-draw-shape-space-fn 'graph-draw-shape-space
   "Function for drawing the empty space of a shape.")
 
-(defun graph-draw-text (text)
-  "Draw the given text of a shape."
+(defun graph-draw-text (text data)
+  "Draw the given TEXT of a shape.
+
+DATA is arbitrary user data associated witht the shape."
   text)
 
 (defvar graph-draw-text-fn 'graph-draw-text
   "Function for drawing text.")
 
-(defun graph-draw-body-line (ypos y width text)
+(defun graph-draw-body-line (ypos y width text &optional data)
   "Draw the body of a shape for a given YPOS.
 
 Y is the y position of the shape.
 WIDTH is the width of the shape.
-TEXT is the text of the shape."
+TEXT is the text of the shape.
+DATA is arbitrary user data associated witht the shape."
   (concat
-   (funcall graph-draw-shape-side-border-fn)
+   (graph-draw-wrapped graph-draw-shape-side-border-fn data)
    (when (> width 1)
      (let* ((index (- ypos y 1))
             (s (if (>= index (length text))
                    ""
-                 (funcall graph-draw-text-fn (elt text index)))))
-       (concat s (funcall graph-draw-shape-space-fn (- width (length s) 2))
-               (funcall graph-draw-shape-side-border-fn))))))
+                 (graph-draw-wrapped graph-draw-text-fn (elt text index) data))))
+       (concat s (graph-draw-wrapped graph-draw-shape-space-fn (- width (length s) 2) data)
+               (graph-draw-wrapped graph-draw-shape-side-border-fn data))))))
 
 (defun graph-draw-at-ypos (ypos shape)
   "Draw at YPOS the given SHAPE."
-  (let-shape (dir type width height y text) shape
+  (let-shape (dir type width height y text data) shape
     (if (equal 'on (graph-rect-relation ypos y height))
-        (graph-draw-border type dir width)
-      (graph-draw-body-line ypos y width text))))
+        (graph-draw-border type dir width data)
+      (graph-draw-body-line ypos y width text data))))
 
 (defun graph-get-overlapping-text (s x width on-top shapes)
   "Calculate the overlapping text.
@@ -358,7 +385,7 @@ Returns an alist with 'xcur, 'shapes, and 'drawn as keys."
   (let* (drawn
          (shape (car shapes))
          (more (cdr shapes)))
-    (let-shape (x y width text dir on-top) shape
+    (let-shape (x y width text dir on-top data) shape
       (when (<= xcur x) ; draw spaces until the start of the first shape
         (setq drawn (concat drawn (graph-fill ?\s (- x xcur)))))
       (let* ((s (graph-draw-at-ypos ypos shape))
