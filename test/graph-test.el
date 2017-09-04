@@ -666,6 +666,17 @@
     (graph-draw-tree '((:north-america (:usa (:miami) (:seattle) (:idaho (:boise)))) (:europe (:germany) (:france (:paris) (:lyon) (:cannes))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Graphs
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(ert-deftest get-side ()
+  "Test calculating the length of a side of a graph."
+  (should (equal 1 (graph-get-side '(0))))
+  (should (equal 2 (graph-get-side '(0 1))))
+  (should (equal 3 (graph-get-side (number-sequence 0 4))))
+  (should (equal 4 (graph-get-side (number-sequence 0 14)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Binary trees
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

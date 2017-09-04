@@ -849,6 +849,15 @@ Nodes should be able to connect to their children in a tree with the least amoun
          (lev-chi (graph-lev-children packed)))
     (apply 'append lev-chi)))
 
+;;Functions specific to graphs
+
+(defun graph-get-side (col)
+  "Calculate the lenght of a side of a graph.
+
+All graphs currently start as square. Therefore the
+length of a side is calculated with the square root."
+  (ceiling (sqrt (length col))))
+
 ;;Functions specific to binary trees
 
 (defun graph--line-info-btree (top tx bottom bx in-line x)
