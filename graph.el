@@ -36,6 +36,11 @@
 
 (cl-defstruct graph-shape x y width height type text dir on-top data)
 
+(cl-defstruct graph-node x y width height text links type)
+
+(cl-defstruct graph-link legs dest arrow)
+(cl-defstruct graph-leg x y dir)
+
 (cl-defstruct graph-treen
   id x y width height text wrapped-text
   line-right line-left line-y line-ypos
@@ -69,6 +74,60 @@ expands to:
   (declare (indent defun))
   `(let ((shape ,shape))
      (let ,(graph--letbinding-gen 'graph-shape binding 'shape)
+       ,@body)))
+
+(defmacro let-node (binding node &rest body)
+  "Bind the slots in BINDING to the values in NODE and execute BODY.
+
+For example, this code:
+
+  (let-node (x y) node
+     (message \"%s\ %s\" x y))
+
+expands to:
+
+  (let ((x (graph-node-x shape))
+        (y (graph-node-y shape)))
+    (message \"%s %s\" x y))"
+  (declare (indent defun))
+  `(let ((node ,node))
+     (let ,(graph--letbinding-gen 'graph-node binding 'node)
+       ,@body)))
+
+(defmacro let-link (binding link &rest body)
+  "Bind the slots in BINDING to the values in LINK and execute BODY.
+
+For example, this code:
+
+  (let-link (x y) link
+     (message \"%s\ %s\" x y))
+
+expands to:
+
+  (let ((x (graph-link-x shape))
+        (y (graph-link-y shape)))
+    (message \"%s %s\" x y))"
+  (declare (indent defun))
+  `(let ((link ,link))
+     (let ,(graph--letbinding-gen 'graph-link binding 'link)
+       ,@body)))
+
+(defmacro let-leg (binding leg &rest body)
+  "Bind the slots in BINDING to the values in LEG and execute BODY.
+
+For example, this code:
+
+  (let-leg (x y) leg
+     (message \"%s\ %s\" x y))
+
+expands to:
+
+  (let ((x (graph-leg-x shape))
+        (y (graph-leg-y shape)))
+    (message \"%s %s\" x y))"
+  (declare (indent defun))
+  `(let ((leg ,leg))
+     (let ,(graph--letbinding-gen 'graph-leg binding 'leg)
        ,@body)))
 
 (defmacro let-treen (binding treen &rest body)
@@ -851,6 +910,38 @@ Nodes should be able to connect to their children in a tree with the least amoun
 
 ;;Functions specific to graphs
 
+(defun graph-graph-to-shapes (graph)
+  "Convert a GRAPH into a list of shapes for rendering."
+  (-mapcat 'graph-node-to-shapes graph))
+
+(defun graph-node-to-shapes (node)
+  "Convert a NODE into a list of shapes for rendering."
+  (let-node (x y width height text links) node
+    (cons (make-graph-node :x x :y y :width width :height height
+                           :text (graph-width-fn text width height) :type 'rect)
+          (-mapcat 'graph-links-to-shapes links))))
+
+(defun graph-links-to-shapes (link)
+  "Convert LINK into a list of shapes for rendering."
+  (let-link (legs dest arrow) link
+    (let* ((shapes (--map (let-leg ((x1 . x) (y1 . y) (dir1 . dir)) (car it)
+                            (let-leg ((x2 . x) (y2 . y) (dir2 . dir)) (cdr it)
+                              (if (or (graph-horizontal dir1) (graph-vertical dir2))
+                                  (make-graph-shape :x (min x1 x2) :y (min y1 y2)
+                                                    :width (+ (abs (- x2 x1)) graph-line-wid)
+                                                    :height graph-line-wid :type 'rect)
+                                (make-graph-shape :x (min x1 x2) :y (min y1 y2)
+                                                  :width graph-line-wid
+                                                  :height (+ (abs (- y2 y1)) graph-line-wid) :type 'rect))))
+                          (-zip-pair legs (cdr legs))))
+           (first-leg (car legs))
+           (rev-legs (reverse legs))
+           (last-leg (car rev-legs)))
+      ;; list of 2 shapes plust
+      ;; list of all shapes where the first is on top
+      ;; and the last is on top set to true
+      (list TODO))))
+
 (defun graph-get-side (col)
   "Calculate the lenght of a side of a graph.
 
@@ -894,32 +985,7 @@ length of a side is calculated with the square root."
 Take a binary tree and convert it into rows.
 A row holds all the nodes of a certain level of the tree.
 The data for each item in a row is a vector, formatted as [indentation width text left-children? right-children?]"
-  (when btree
-    (let* ((cur (car btree))
-           (lno (graph-layout-btree (cadr btree)))
-           (lyes (graph-layout-btree (caddr btree)))
-           (wno (apply 'max 0 (-map 'graph-btree-row-wid lno)))
-           (wyes (apply 'max 0 (-map 'graph-btree-row-wid lyes)))
-           (wid (+ (length (graph-label-text cur)) 4))
-           (node-off (if lno
-                         (+ (graph-btree-row-wid (car lno)) 2)
-                       0))
-           (yes-off (max (+ 1 wno) (+ node-off wid 2))))
-      (cons (list (make-graph-btreen :ind node-off :width wid :text cur
-                                     :left (not (seq-empty-p lno))
-                                     :right (not (seq-empty-p lyes))))
-            (let ((m (max (length lno) (length lyes))))
-              (cl-mapcar (lambda (rno ryes)
-                           (if ryes
-                               (let ((node (car ryes))
-                                     (rest (cdr ryes)))
-                                 (let-btreen (ind width text left right) node
-                                   (append rno (cons (make-graph-btreen :ind (- (+ ind yes-off) (graph-btree-row-wid rno))
-                                                                        :width width :text text :left left :right right)
-                                                     rest))))
-                             rno))
-                         (-take m (apply 'append (-pad nil lno lyes)))
-                         (-take m (apply 'append (-pad nil lyes lno)))))))))
+  )
 
 (defun graph-sp (&optional n)
   "Return 1 to N spaces in a string."
