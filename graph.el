@@ -41,6 +41,8 @@
 (cl-defstruct graph-link legs dest arrow)
 (cl-defstruct graph-leg x y dir)
 
+(cl-defstruct graph-nodepos x y text)
+
 (cl-defstruct graph-treen
   id x y width height text wrapped-text
   line-right line-left line-y line-ypos
@@ -921,6 +923,7 @@ Nodes should be able to connect to their children in a tree with the least amoun
                            :text (graph-width-fn text width height) :type 'rect)
           (-mapcat 'graph-links-to-shapes links))))
 
+;; TODO TEST
 (defun graph-links-to-shapes (link)
   "Convert LINK into a list of shapes for rendering."
   (let-link (legs dest arrow) link
@@ -937,10 +940,50 @@ Nodes should be able to connect to their children in a tree with the least amoun
            (first-leg (car legs))
            (rev-legs (reverse legs))
            (last-leg (car rev-legs)))
-      ;; list of 2 shapes plust
+      ;; list of 2 shapes plus
       ;; list of all shapes where the first is on top
       ;; and the last is on top set to true
-      (list TODO))))
+      (setf (graph-shape-on-top (car shapes)) t
+            (graph-shape-on-top (last shapes)) t)
+      (append
+       (list
+        (make-graph-shape :type (if (equal arrow 'start)
+                                    'arrow
+                                  'cap)
+                          :x (graph-leg-x first-leg)
+                          :y (graph-leg-y first-leg)
+                          :width graph-line-wid
+                          :height graph-line-wid
+                          :on-top t
+                          :dir (pcase (graph-leg-dir first-leg)
+                                 ('right 'left)
+                                 ('left 'right)
+                                 ('up 'down)
+                                 ('down 'up)))
+        (make-graph-shape :type (if (equal arrow 'end)
+                                    'arrow
+                                  'cap)
+                          :x (graph-leg-x last-leg)
+                          :y (graph-leg-y last-leg)
+                          :width graph-line-wid
+                          :height line-wid
+                          :on-top t
+                          :dir (graph-leg-dir (cadr rev-legs))))
+       shapes))))
+
+;; TODO TEST
+(defun graph-tension (edges pos)
+  "Calculate the manhatten distance between all EDGES in a graph.
+
+POS is a mapping of nodes to a position (x, y, text)."
+  (apply + (--map (let* ((f (cdr (assoc (car it) pos)))
+                         (t (cdr (assoc (cdr it) pos)))
+                         (fx (graph-nodepos-x f))
+                         (fy (graph-nodepos-y f))
+                         (tx (graph-nodepos-x t))
+                         (ty (graph-nodepos-y t)))
+                    (+ (abs (- fx tx)) (abs (- fy ty))))
+                  edges)))
 
 (defun graph-get-side (col)
   "Calculate the lenght of a side of a graph.
@@ -948,6 +991,23 @@ Nodes should be able to connect to their children in a tree with the least amoun
 All graphs currently start as square. Therefore the
 length of a side is calculated with the square root."
   (ceiling (sqrt (length col))))
+
+(defun graph--rand-elt (items)
+  "Choose a random element from list ITEMS"
+  (let* ((size (length items))
+         (index (random size)))
+    (nth index items)))
+
+;; TODO TEST
+;; TODO how can we create a map???
+(defun shuffle-nodes (pos nodes)
+  "Randomly swaps two NODES of the graph."
+  (let* ((a (graph--rand-elt nodes))
+         (b (graph--rand-elt nodes))
+         (an (cdr (assoc a pos)))
+         (bn (cdr (assoc b pos))))
+    ;; merge map pos with a and b overriding shizzle
+    (map-merge 'list pos (list (cons a nil)))))
 
 ;;Functions specific to binary trees
 
